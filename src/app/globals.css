@@ -1,0 +1,209 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  FOGGY NOOK — Black & Gold theme
+  Gold accent: #C9A227 (muted antique gold, not neon/yellow)
+  Deep black base for dark mode, warm off-white for light mode
+*/
+
+:root {
+  --radius: 0.625rem;
+
+  --background: #faf9f6;
+  --foreground: #17140f;
+
+  --card: #ffffff;
+  --card-foreground: #17140f;
+
+  --popover: #ffffff;
+  --popover-foreground: #17140f;
+
+  --primary: #8a6d1f;
+  --primary-foreground: #fffdf5;
+
+  --secondary: #f0ece0;
+  --secondary-foreground: #17140f;
+
+  --muted: #f0ece0;
+  --muted-foreground: #6b6250;
+
+  --accent: #c9a227;
+  --accent-foreground: #17140f;
+
+  --destructive: #b3261e;
+  --destructive-foreground: #fffdf5;
+
+  --border: #e5dfcf;
+  --input: #e5dfcf;
+  --ring: #c9a227;
+
+  --success: #1e7a4c;
+  --warning: #b3791e;
+
+  --sidebar: #14120d;
+  --sidebar-foreground: #ece6d6;
+  --sidebar-primary: #c9a227;
+  --sidebar-primary-foreground: #14120d;
+  --sidebar-accent: #211d14;
+  --sidebar-accent-foreground: #ece6d6;
+  --sidebar-border: #2a251a;
+  --sidebar-ring: #c9a227;
+
+  --chart-1: #c9a227;
+  --chart-2: #8a6d1f;
+  --chart-3: #4a4331;
+  --chart-4: #1e7a4c;
+  --chart-5: #b3261e;
+}
+
+.dark {
+  --background: #0c0b08;
+  --foreground: #ece6d6;
+
+  --card: #14120d;
+  --card-foreground: #ece6d6;
+
+  --popover: #14120d;
+  --popover-foreground: #ece6d6;
+
+  --primary: #c9a227;
+  --primary-foreground: #14120d;
+
+  --secondary: #1b1810;
+  --secondary-foreground: #ece6d6;
+
+  --muted: #1b1810;
+  --muted-foreground: #a89f88;
+
+  --accent: #d9b74a;
+  --accent-foreground: #14120d;
+
+  --destructive: #e35d51;
+  --destructive-foreground: #14120d;
+
+  --border: #241f15;
+  --input: #241f15;
+  --ring: #c9a227;
+
+  --success: #34a870;
+  --warning: #d9a63e;
+
+  --sidebar: #0a0908;
+  --sidebar-foreground: #ece6d6;
+  --sidebar-primary: #c9a227;
+  --sidebar-primary-foreground: #0a0908;
+  --sidebar-accent: #171410;
+  --sidebar-accent-foreground: #ece6d6;
+  --sidebar-border: #1c1811;
+  --sidebar-ring: #c9a227;
+
+  --chart-1: #c9a227;
+  --chart-2: #d9b74a;
+  --chart-3: #a89f88;
+  --chart-4: #34a870;
+  --chart-5: #e35d51;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-playfair);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+  }
+  .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+/* Thin gold scrollbar for a premium feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+/*
+  Print isolation — when window.print() is triggered, hide the entire app
+  chrome and show only the receipt document. The receipt component renders
+  into a portal with id="receipt-print-root" (see ReceiptPreviewModal), so
+  this works regardless of which page/dialog is open underneath it.
+*/
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receipt-print-root,
+  #receipt-print-root * {
+    visibility: visible;
+  }
+  #receipt-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  @page {
+    margin: 0;
+  }
+}
