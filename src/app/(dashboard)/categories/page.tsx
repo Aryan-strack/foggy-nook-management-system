@@ -38,7 +38,7 @@ import { useAppStore } from "@/store/app-store";
 
 export default function CategoriesPage() {
   const profile = useAppStore((s) => s.profile);
-  const canWrite = profile?.role === "super_admin" || profile?.role === "admin";
+  const canWrite = ["super_admin", "admin", "manager"].includes(profile?.role ?? "");
 
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [loading, setLoading] = React.useState(true);

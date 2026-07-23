@@ -33,7 +33,7 @@ import { useAppStore } from "@/store/app-store";
 
 export default function BrandsPage() {
   const profile = useAppStore((s) => s.profile);
-  const canWrite = profile?.role === "super_admin" || profile?.role === "admin";
+  const canWrite = ["super_admin", "admin", "manager"].includes(profile?.role ?? "");
 
   const [brands, setBrands] = React.useState<Brand[]>([]);
   const [loading, setLoading] = React.useState(true);

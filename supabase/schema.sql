@@ -219,6 +219,7 @@ create table if not exists sale_items (
   unit_cost numeric(12,2) not null default 0,
   discount numeric(12,2) not null default 0,
   total numeric(12,2) not null,
+  custom_item_name text,
   created_at timestamptz not null default now()
 );
 
@@ -380,6 +381,13 @@ as $$
   select current_profile_role() in ('super_admin', 'admin');
 $$;
 
+create or replace function is_manager_or_above()
+returns boolean
+language sql stable security definer
+as $$
+  select current_profile_role() in ('super_admin', 'admin', 'manager');
+$$;
+
 -- Auto-create profile row when a new auth user is created (metadata-driven)
 create or replace function handle_new_user()
 returns trigger
@@ -457,22 +465,22 @@ drop policy if exists "brands_select" on brands;
 create policy "brands_select" on brands for select using (auth.uid() is not null);
 drop policy if exists "brands_write" on brands;
 create policy "brands_write" on brands for all
-  using (is_admin_or_above()) with check (is_admin_or_above());
+  using (is_manager_or_above()) with check (is_manager_or_above());
 
 drop policy if exists "categories_select" on categories;
 create policy "categories_select" on categories for select using (auth.uid() is not null);
 drop policy if exists "categories_write" on categories;
 create policy "categories_write" on categories for all
-  using (is_admin_or_above()) with check (is_admin_or_above());
+  using (is_manager_or_above()) with check (is_manager_or_above());
 
--- PRODUCTS: everyone can read; admin+ can write (managers can update stock via branch_inventory, not product master)
+-- PRODUCTS: everyone can read; manager+ can write
 drop policy if exists "products_select" on products;
 create policy "products_select" on products for select using (auth.uid() is not null);
 drop policy if exists "products_write" on products;
 create policy "products_write" on products for all
-  using (is_admin_or_above()) with check (is_admin_or_above());
+  using (is_manager_or_above()) with check (is_manager_or_above());
 
--- BRANCH INVENTORY: admin+ see all; manager sees/updates only their branch
+-- BRANCH INVENTORY: manager+ see all; manager sees/updates only their branch
 drop policy if exists "branch_inventory_select" on branch_inventory;
 create policy "branch_inventory_select" on branch_inventory for select
   using (is_admin_or_above() or branch_id = current_profile_branch());
@@ -605,6 +613,10 @@ insert into categories (name) values
   ('E-Liquid'), ('Salt Nic'), ('Cigarette'), ('Accessories'), ('Battery'), ('Charger')
 on conflict (name) do nothing;
 
+insert into products (name, sku, cost_price, selling_price, is_active, is_loose_saleable)
+values ('Manual Sale Item', 'MANUAL-ITEM', 0, 0, false, true)
+on conflict (sku) do nothing;
+
 -- Example per-branch printer configuration (matches the spec's example:
 -- Vehari → XPrinter XP-80C, Multan → Epson TM-T20). Connection type defaults
 -- to 'browser' (plain browser print) until an Admin pairs a real device via
@@ -637,7 +649,8 @@ create or replace function checkout_sale(
   p_payment_breakdown jsonb,
   p_notes text,
   p_customer_name text default null,
-  p_paid_amount numeric default null
+  p_paid_amount numeric default null,
+  p_skip_inventory boolean default false
 )
 returns sales
 language plpgsql
@@ -655,6 +668,7 @@ declare
   v_stock_row branch_inventory;
   v_qty numeric;
   v_item_type sale_item_type;
+  v_skip_inventory boolean;
   v_stock_before integer;
   v_stock_after integer;
 begin
@@ -686,8 +700,9 @@ begin
   for v_item in select * from jsonb_array_elements(p_items) loop
     v_qty := (v_item->>'quantity')::numeric;
     v_item_type := (v_item->>'item_type')::sale_item_type;
+    v_skip_inventory := coalesce((v_item->>'skip_inventory')::boolean, p_skip_inventory, false);
 
-    insert into sale_items (sale_id, product_id, item_type, quantity, unit_price, unit_cost, discount, total)
+    insert into sale_items (sale_id, product_id, item_type, quantity, unit_price, unit_cost, discount, total, custom_item_name)
     values (
       v_sale.id,
       (v_item->>'product_id')::uuid,
@@ -696,37 +711,40 @@ begin
       (v_item->>'unit_price')::numeric,
       (v_item->>'unit_cost')::numeric,
       coalesce((v_item->>'discount')::numeric, 0),
-      (v_item->>'unit_price')::numeric * v_qty - coalesce((v_item->>'discount')::numeric, 0)
+      (v_item->>'unit_price')::numeric * v_qty - coalesce((v_item->>'discount')::numeric, 0),
+      case when v_skip_inventory then (v_item->>'custom_item_name') else null end
     );
 
-    -- lock and fetch current stock row
-    select * into v_stock_row from branch_inventory
-      where branch_id = p_branch_id and product_id = (v_item->>'product_id')::uuid
-      for update;
+    if not v_skip_inventory then
+      -- lock and fetch current stock row
+      select * into v_stock_row from branch_inventory
+        where branch_id = p_branch_id and product_id = (v_item->>'product_id')::uuid
+        for update;
 
-    if not found then
-      insert into branch_inventory (branch_id, product_id, stock, loose_stock)
-      values (p_branch_id, (v_item->>'product_id')::uuid, 0, 0)
-      returning * into v_stock_row;
+      if not found then
+        insert into branch_inventory (branch_id, product_id, stock, loose_stock)
+        values (p_branch_id, (v_item->>'product_id')::uuid, 0, 0)
+        returning * into v_stock_row;
+      end if;
+
+      if v_item_type = 'loose' then
+        v_stock_before := v_stock_row.loose_stock;
+        v_stock_after := v_stock_before - v_qty::int;
+        update branch_inventory set loose_stock = v_stock_after, updated_at = now()
+          where id = v_stock_row.id;
+      else
+        v_stock_before := v_stock_row.stock;
+        v_stock_after := v_stock_before - v_qty::int;
+        update branch_inventory set stock = v_stock_after, updated_at = now()
+          where id = v_stock_row.id;
+      end if;
+
+      insert into inventory_logs (
+        branch_id, product_id, movement_type, quantity, stock_before, stock_after, reference_id, performed_by
+      ) values (
+        p_branch_id, (v_item->>'product_id')::uuid, 'sale', -v_qty::int, v_stock_before, v_stock_after, v_sale.id, p_cashier_id
+      );
     end if;
-
-    if v_item_type = 'loose' then
-      v_stock_before := v_stock_row.loose_stock;
-      v_stock_after := v_stock_before - v_qty::int;
-      update branch_inventory set loose_stock = v_stock_after, updated_at = now()
-        where id = v_stock_row.id;
-    else
-      v_stock_before := v_stock_row.stock;
-      v_stock_after := v_stock_before - v_qty::int;
-      update branch_inventory set stock = v_stock_after, updated_at = now()
-        where id = v_stock_row.id;
-    end if;
-
-    insert into inventory_logs (
-      branch_id, product_id, movement_type, quantity, stock_before, stock_after, reference_id, performed_by
-    ) values (
-      p_branch_id, (v_item->>'product_id')::uuid, 'sale', -v_qty::int, v_stock_before, v_stock_after, v_sale.id, p_cashier_id
-    );
   end loop;
 
   insert into activity_logs (actor_id, branch_id, action, entity_type, entity_id)
@@ -735,6 +753,85 @@ begin
   return v_sale;
 end;
 $$;
+
+create or replace function get_branch_pos_products(p_branch_id uuid)
+returns jsonb
+language sql stable security definer
+as $$
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'id', bi.id,
+      'branch_id', bi.branch_id,
+      'product_id', bi.product_id,
+      'stock', coalesce(bi.stock, 0),
+      'loose_stock', coalesce(bi.loose_stock, 0),
+      'updated_at', bi.updated_at,
+      'product', case when p.id is null then null else jsonb_build_object(
+        'id', p.id,
+        'name', p.name,
+        'sku', p.sku,
+        'barcode', p.barcode,
+        'image_url', p.image_url,
+        'brand_id', p.brand_id,
+        'category_id', p.category_id,
+        'cost_price', p.cost_price,
+        'selling_price', p.selling_price,
+        'loose_selling_price', p.loose_selling_price,
+        'quantity_per_pack', p.quantity_per_pack,
+        'is_loose_saleable', p.is_loose_saleable,
+        'minimum_stock', p.minimum_stock,
+        'is_active', p.is_active,
+        'created_at', p.created_at,
+        'updated_at', p.updated_at,
+        'brand', case when b.id is null then null else jsonb_build_object(
+          'id', b.id,
+          'name', b.name,
+          'logo_url', b.logo_url,
+          'is_active', b.is_active,
+          'created_at', b.created_at,
+          'updated_at', b.updated_at
+        ) end,
+        'category', case when c.id is null then null else jsonb_build_object(
+          'id', c.id,
+          'name', c.name,
+          'description', c.description,
+          'is_active', c.is_active,
+          'created_at', c.created_at,
+          'updated_at', c.updated_at
+        ) end
+      ) end,
+      'branch', case when br.id is null then null else jsonb_build_object(
+        'id', br.id,
+        'name', br.name,
+        'code', br.code,
+        'address', br.address,
+        'phone', br.phone,
+        'city', br.city,
+        'is_active', br.is_active,
+        'created_at', br.created_at,
+        'updated_at', br.updated_at
+      ) end
+    )
+  ), '[]'::jsonb)
+  from products p
+  left join branch_inventory bi on bi.product_id = p.id and bi.branch_id = p_branch_id
+  left join branches br on br.id = p_branch_id
+  left join brands b on b.id = p.brand_id
+  left join categories c on c.id = p.category_id
+  where p.is_active = true
+  order by p.name;
+$$;
+
+-- ============================================================================
+-- STORAGE BUCKET
+-- ============================================================================
+
+insert into storage.buckets (id, name, public)
+values ('product-images', 'product-images', true)
+on conflict (id) do nothing;
+
+-- Storage RLS: authenticated users can upload to their own folder; read is public because bucket is public.
+-- Configure these policies in the Supabase Dashboard → Storage → product-images → Policies if needed.
 
 -- ============================================================================
 -- NOTES

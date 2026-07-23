@@ -4,13 +4,14 @@ import * as React from "react";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useAppStore } from "@/store/app-store";
-import { fetchBranchInventory } from "@/services/inventory";
+import { fetchBranchPosProducts } from "@/services/inventory";
 import { fetchSettings } from "@/services/settings";
 import { fetchBranchPrinter } from "@/services/printers";
 import type { BranchInventory, BranchPrinter, ReceiptData, Sale, Settings } from "@/types";
 import { ProductGrid } from "@/components/pos/product-grid";
 import { CartPanel, type CheckoutContext } from "@/components/pos/cart-panel";
 import { ReceiptPreviewModal } from "@/components/receipt/receipt-preview-modal";
+import { ManualSaleDialog } from "@/components/pos/manual-sale-dialog";
 import { buildReceiptDataFromCheckout } from "@/lib/receipt/build-receipt-data";
 import { printReceiptEscPos } from "@/lib/escpos/print-service";
 import {
@@ -20,6 +21,8 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { PlusIcon } from "lucide-react";
 
 export default function POSPage() {
   const profile = useAppStore((s) => s.profile);
@@ -36,6 +39,7 @@ export default function POSPage() {
   const [loading, setLoading] = React.useState(true);
   const [receiptData, setReceiptData] = React.useState<ReceiptData | null>(null);
   const [receiptOpen, setReceiptOpen] = React.useState(false);
+  const [manualOpen, setManualOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!branchId) {
@@ -44,7 +48,7 @@ export default function POSPage() {
       return;
     }
     setLoading(true);
-    Promise.all([fetchBranchInventory(branchId), fetchSettings(), fetchBranchPrinter(branchId)])
+    Promise.all([fetchBranchPosProducts(branchId), fetchSettings(), fetchBranchPrinter(branchId)])
       .then(([inv, s, p]) => {
         setInventory(inv);
         setSettings(s);
@@ -133,12 +137,30 @@ export default function POSPage() {
             <Loader2Icon className="mr-2 size-4 animate-spin" /> Loading products…
           </div>
         ) : (
-          <ProductGrid inventory={inventory} />
+          <>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-muted-foreground">Products</h3>
+              <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}>
+                <PlusIcon className="mr-1.5 size-4" />
+                Manual Sale
+              </Button>
+            </div>
+            <ProductGrid inventory={inventory} />
+          </>
         )}
       </div>
       <div className="rounded-xl border bg-card p-4">
         <CartPanel branchId={branchId} onCheckoutComplete={handleCheckoutComplete} />
       </div>
+
+      <ManualSaleDialog
+        open={manualOpen}
+        onOpenChange={setManualOpen}
+        branchId={branchId}
+        onComplete={() => {
+          setManualOpen(false);
+        }}
+      />
 
       <ReceiptPreviewModal
         data={receiptData}

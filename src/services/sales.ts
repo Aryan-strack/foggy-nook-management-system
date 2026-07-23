@@ -23,6 +23,7 @@ export async function checkoutSale(params: {
     unit_price: i.unitPrice,
     unit_cost: i.unitCost,
     discount: i.discount,
+    skip_inventory: i.isManual || false,
   }));
 
   const { data, error } = await supabase.rpc("checkout_sale", {
@@ -37,6 +38,81 @@ export async function checkoutSale(params: {
     p_notes: params.notes ?? null,
     p_customer_name: params.customerName ?? null,
     p_paid_amount: params.paidAmount ?? null,
+  });
+
+  if (error) throw error;
+  return data as Sale;
+}
+
+export async function createManualSale(params: {
+  branchId: string;
+  cashierId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  unitCost: number;
+  discount: number;
+  customerName?: string | null;
+  paymentMethod: PaymentMethod;
+  paidAmount?: number | null;
+  notes?: string;
+}) {
+  const supabase = createClient();
+
+  let { data: manualProduct } = await supabase
+    .from("products")
+    .select("id")
+    .eq("sku", "MANUAL-ITEM")
+    .maybeSingle();
+
+  if (!manualProduct) {
+    const { data: created, error: createError } = await supabase
+      .from("products")
+      .insert({
+        name: "Manual Sale Item",
+        sku: "MANUAL-ITEM",
+        cost_price: 0,
+        selling_price: 0,
+        is_active: false,
+        is_loose_saleable: true,
+      })
+      .select("id")
+      .single();
+
+    if (createError || !created) {
+      throw createError ?? new Error("Failed to create manual sale placeholder product");
+    }
+    manualProduct = created;
+  }
+
+  const productId = manualProduct.id;
+
+  const items = [
+    {
+      product_id: productId,
+      item_type: "unit",
+      quantity: params.quantity,
+      unit_price: params.unitPrice,
+      unit_cost: params.unitCost,
+      discount: params.discount,
+      skip_inventory: true,
+      custom_item_name: params.productName,
+    },
+  ];
+
+  const { data, error } = await supabase.rpc("checkout_sale", {
+    p_branch_id: params.branchId,
+    p_cashier_id: params.cashierId,
+    p_customer_id: null,
+    p_items: items,
+    p_discount: 0,
+    p_tax: 0,
+    p_payment_method: params.paymentMethod,
+    p_payment_breakdown: null,
+    p_notes: params.notes ?? null,
+    p_customer_name: params.customerName ?? null,
+    p_paid_amount: params.paidAmount ?? null,
+    p_skip_inventory: true,
   });
 
   if (error) throw error;

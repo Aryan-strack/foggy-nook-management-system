@@ -154,6 +154,7 @@ export interface SaleItem {
   unit_cost: number;
   discount: number;
   total: number;
+  custom_item_name: string | null;
   created_at: string;
   product?: Product;
 }
@@ -262,6 +263,7 @@ export interface CartItem {
   unitPrice: number;
   unitCost: number;
   discount: number;
+  isManual?: boolean;
 }
 
 // Normalized shape consumed by all Receipt* components — built either from

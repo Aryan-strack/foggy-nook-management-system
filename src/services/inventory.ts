@@ -12,6 +12,21 @@ export async function fetchBranchInventory(branchId?: string | null) {
   return data as unknown as BranchInventory[];
 }
 
+export async function fetchBranchPosProducts(branchId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("get_branch_pos_products", {
+    p_branch_id: branchId,
+  });
+  if (error) throw error;
+  const raw = (data ?? []) as unknown as Record<string, unknown>[];
+  return raw.map((row, idx) => ({
+    ...row,
+    id: (row.id as string) ?? `pos-${idx}`,
+    product: row.product as BranchInventory["product"],
+    branch: row.branch as BranchInventory["branch"],
+  })) as unknown as BranchInventory[];
+}
+
 export async function adjustStock(params: {
   branchId: string;
   productId: string;

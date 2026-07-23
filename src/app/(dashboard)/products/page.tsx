@@ -28,7 +28,7 @@ import { formatCurrency } from "@/lib/utils";
 
 export default function ProductsPage() {
   const profile = useAppStore((s) => s.profile);
-  const canWrite = profile?.role === "super_admin" || profile?.role === "admin";
+  const canWrite = ["super_admin", "admin", "manager"].includes(profile?.role ?? "");
 
   const [products, setProducts] = React.useState<Product[]>([]);
   const [brands, setBrands] = React.useState<Brand[]>([]);

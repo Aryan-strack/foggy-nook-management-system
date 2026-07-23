@@ -17,7 +17,7 @@ export function buildReceiptData(
     shopName: settings?.shop_name ?? "Foggy Nook",
     logoUrl: printer?.header_logo_url ?? settings?.logo_url ?? null,
     items: (sale.items ?? []).map((item) => ({
-      name: item.product?.name ?? "Item",
+      name: item.custom_item_name ?? item.product?.name ?? "Item",
       qty: item.quantity,
       unitPrice: item.unit_price,
       discount: item.discount,

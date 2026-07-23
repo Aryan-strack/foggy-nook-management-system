@@ -7,6 +7,13 @@ interface CartState {
   taxPercent: number;
   customerName: string;
   addItem: (product: Product, itemType: SaleItemType, quantity: number) => void;
+  addManualItem: (params: {
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    unitCost: number;
+    discount: number;
+  }) => void;
   updateQuantity: (productId: string, itemType: SaleItemType, quantity: number) => void;
   removeItem: (productId: string, itemType: SaleItemType) => void;
   setDiscount: (discount: number) => void;
@@ -48,10 +55,48 @@ export const useCartStore = create<CartState>((set, get) => ({
       return {
         items: [
           ...state.items,
-          { product, itemType, quantity, unitPrice: price, unitCost, discount: 0 },
+          { product, itemType, quantity, unitPrice: price, unitCost, discount: 0, isManual: false },
         ],
       };
     });
+  },
+
+  addManualItem: ({ name, quantity, unitPrice, unitCost, discount }) => {
+    const manualProduct: Product = {
+      id: "manual",
+      name,
+      sku: "MANUAL",
+      barcode: null,
+      image_url: null,
+      brand_id: null,
+      category_id: null,
+      cost_price: unitCost,
+      selling_price: unitPrice,
+      loose_selling_price: null,
+      quantity_per_pack: 1,
+      is_loose_saleable: false,
+      minimum_stock: 0,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      brand: null,
+      category: null,
+    };
+
+    set((state) => ({
+      items: [
+        ...state.items,
+        {
+          product: manualProduct,
+          itemType: "unit",
+          quantity,
+          unitPrice,
+          unitCost,
+          discount,
+          isManual: true,
+        },
+      ],
+    }));
   },
 
   updateQuantity: (productId, itemType, quantity) =>
@@ -73,7 +118,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   setDiscount: (discount) => set({ discount }),
   setTaxPercent: (taxPercent) => set({ taxPercent }),
   setCustomerName: (customerName) => set({ customerName }),
-  clear: () => set({ items: [], discount: 0, customerName: "" }),
+  clear: () => set({ items: [], discount: 0, taxPercent: 0, customerName: "" }),
 
   subtotal: () =>
     get().items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),

@@ -48,13 +48,13 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Brands",
     href: "/brands",
     icon: TagIcon,
-    roles: ["super_admin", "admin"],
+    roles: ["super_admin", "admin", "manager"],
   },
   {
     label: "Categories",
     href: "/categories",
     icon: ShapesIcon,
-    roles: ["super_admin", "admin"],
+    roles: ["super_admin", "admin", "manager"],
   },
   {
     label: "Inventory",

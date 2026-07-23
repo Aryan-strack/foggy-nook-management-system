@@ -4,7 +4,7 @@ import * as React from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2Icon } from "lucide-react";
+import { Loader2Icon, UploadIcon, XIcon, ImageOffIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -61,6 +61,9 @@ export function ProductFormDialog({
   onSaved: () => void;
 }) {
   const [saving, setSaving] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+  const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -68,6 +71,7 @@ export function ProductFormDialog({
     control,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
@@ -83,10 +87,10 @@ export function ProductFormDialog({
     },
   });
 
-  const isLooseSaleable = watch("is_loose_saleable");
-
   React.useEffect(() => {
     if (open) {
+      const imageUrl = product?.image_url ?? "";
+      setImagePreview(imageUrl);
       reset(
         product
           ? {
@@ -101,7 +105,7 @@ export function ProductFormDialog({
               quantity_per_pack: product.quantity_per_pack,
               minimum_stock: product.minimum_stock,
               is_loose_saleable: product.is_loose_saleable,
-              image_url: product.image_url ?? "",
+              image_url: imageUrl,
             }
           : {
               name: "",
@@ -112,10 +116,53 @@ export function ProductFormDialog({
               quantity_per_pack: 1,
               minimum_stock: 5,
               is_loose_saleable: false,
+              image_url: "",
             }
       );
     }
   }, [open, product, reset]);
+
+  const isLooseSaleable = watch("is_loose_saleable");
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Upload failed");
+      }
+
+      const data = await res.json();
+      setValue("image_url", data.url);
+      setImagePreview(data.url);
+      toast.success("Image uploaded");
+    } catch (err) {
+      toast.error("Upload failed", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
+  function handleRemoveImage() {
+    setValue("image_url", "");
+    setImagePreview(null);
+  }
 
   async function onSubmit(values: FormValues) {
     setSaving(true);
@@ -139,6 +186,7 @@ export function ProductFormDialog({
         toast.success("Product added");
       }
       onOpenChange(false);
+      setImagePreview(null);
       onSaved();
     } catch (e) {
       toast.error("Something went wrong", {
@@ -268,8 +316,57 @@ export function ProductFormDialog({
             )}
 
             <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <Label>Image URL (optional)</Label>
-              <Input {...register("image_url")} placeholder="https://…" />
+              <Label>Product Image</Label>
+              <div className="flex items-start gap-4">
+                <div className="flex size-20 shrink-0 items-center justify-center rounded-md border border-dashed">
+                  {imagePreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={imagePreview} alt="Preview" className="size-full rounded-md object-cover" />
+                  ) : (
+                    <ImageOffIcon className="size-6 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex flex-1 flex-col gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <Loader2Icon className="mr-1.5 size-4 animate-spin" />
+                      ) : (
+                        <UploadIcon className="mr-1.5 size-4" />
+                      )}
+                      {uploading ? "Uploading..." : "Upload Image"}
+                    </Button>
+                    {imagePreview && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveImage}
+                      >
+                        <XIcon className="mr-1.5 size-4" />
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    JPG, PNG, WebP or GIF. Max 5MB.
+                  </p>
+                </div>
+              </div>
+              <Input type="hidden" {...register("image_url")} />
             </div>
           </div>
 
